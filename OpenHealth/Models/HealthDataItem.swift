@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import SwiftUI
 
 @Model
 class HealthDataItem {
@@ -88,6 +89,63 @@ enum HealthDataType: String, Codable, CaseIterable, Identifiable {
         case .activeEnergyBurned: return "flame.fill"
         case .sleepAnalysis: return "bed.double.fill"
         case .respiratoryRate: return "wind"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .stepCount: return .blue
+        case .bodyMass: return .purple
+        case .heartRate: return .red
+        case .restingHeartRate: return .pink
+        case .bloodPressureSystolic: return .red
+        case .bloodPressureDiastolic: return .blue
+        case .oxygenSaturation: return .cyan
+        case .activeEnergyBurned: return .orange
+        case .sleepAnalysis: return .indigo
+        case .respiratoryRate: return .teal
+        }
+    }
+
+    var usesBarChart: Bool {
+        switch self {
+        case .stepCount, .activeEnergyBurned, .sleepAnalysis: return true
+        default: return false
+        }
+    }
+
+    func formattedValue(_ value: Double) -> String {
+        switch self {
+        case .stepCount: return String(format: "%.0f", value)
+        case .bodyMass: return String(format: "%.1f kg", value)
+        case .heartRate, .restingHeartRate: return String(format: "%.0f bpm", value)
+        case .bloodPressureSystolic, .bloodPressureDiastolic: return String(format: "%.0f mmHg", value)
+        case .oxygenSaturation: return String(format: "%.1f%%", value)
+        case .activeEnergyBurned: return String(format: "%.0f kcal", value)
+        case .sleepAnalysis: return String(format: "%.1f Std", value)
+        case .respiratoryRate: return String(format: "%.0f /min", value)
+        }
+    }
+}
+
+// MARK: - Enabled Types Persistence
+
+enum EnabledTypesStore {
+    private static let key = "enabledHealthDataTypes"
+    private static let defaultTypes: Set<HealthDataType> = [.stepCount, .heartRate, .bodyMass]
+
+    static func load() -> Set<HealthDataType> {
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let rawValues = try? JSONDecoder().decode([String].self, from: data) else {
+            return defaultTypes
+        }
+        return Set(rawValues.compactMap { HealthDataType(rawValue: $0) })
+    }
+
+    static func save(_ types: Set<HealthDataType>) {
+        let rawValues = types.map { $0.rawValue }
+        if let data = try? JSONEncoder().encode(rawValues) {
+            UserDefaults.standard.set(data, forKey: key)
         }
     }
 }

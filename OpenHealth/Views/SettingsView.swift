@@ -85,8 +85,8 @@ struct SettingsView: View {
 // MARK: - Sub-Views
 
 struct HealthKitSettingsView: View {
-    @State private var enabledTypes: Set<HealthDataType> = [.stepCount, .heartRate, .bodyMass]
-    
+    @State private var enabledTypes: Set<HealthDataType> = EnabledTypesStore.load()
+
     var body: some View {
         List {
             ForEach(HealthDataType.allCases) { type in
@@ -98,6 +98,7 @@ struct HealthKitSettingsView: View {
                         } else {
                             enabledTypes.remove(type)
                         }
+                        EnabledTypesStore.save(enabledTypes)
                     }
                 ))
             }

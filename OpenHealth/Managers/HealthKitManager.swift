@@ -56,27 +56,43 @@ class HealthKitManager: ObservableObject {
     // MARK: - Fetch Data
     
     func fetchAllData(for date: Date) async -> [HealthDataItem] {
+        let predicate = createDayPredicate(for: date)
+        return await fetchAllData(predicate: predicate)
+    }
+
+    func fetchAllData(for date: Date, types: Set<HealthDataType>) async -> [HealthDataItem] {
+        let predicate = createDayPredicate(for: date)
+        return await fetchAllData(predicate: predicate, types: types)
+    }
+
+    func fetchData(for types: [HealthDataType], from startDate: Date, to endDate: Date) async -> [HealthDataItem] {
+        let predicate = createRangePredicate(from: startDate, to: endDate)
+        return await fetchAllData(predicate: predicate, types: Set(types))
+    }
+
+    private func fetchAllData(predicate: NSPredicate, types: Set<HealthDataType>? = nil) async -> [HealthDataItem] {
         var allItems: [HealthDataItem] = []
-        
-        await appendSteps(to: &allItems, for: date)
-        await appendWeight(to: &allItems, for: date)
-        await appendHeartRate(to: &allItems, for: date)
-        await appendBloodPressure(to: &allItems, for: date)
-        await appendOxygenSaturation(to: &allItems, for: date)
-        await appendActiveEnergy(to: &allItems, for: date)
-        await appendSleep(to: &allItems, for: date)
-        await appendRespiratoryRate(to: &allItems, for: date)
-        
+        let enabledTypes = types ?? Set(HealthDataType.allCases)
+
+        if enabledTypes.contains(.stepCount) { await appendSteps(to: &allItems, predicate: predicate) }
+        if enabledTypes.contains(.bodyMass) { await appendWeight(to: &allItems, predicate: predicate) }
+        if enabledTypes.contains(.heartRate) { await appendHeartRate(to: &allItems, predicate: predicate) }
+        if enabledTypes.contains(.bloodPressureSystolic) || enabledTypes.contains(.bloodPressureDiastolic) {
+            await appendBloodPressure(to: &allItems, predicate: predicate)
+        }
+        if enabledTypes.contains(.oxygenSaturation) { await appendOxygenSaturation(to: &allItems, predicate: predicate) }
+        if enabledTypes.contains(.activeEnergyBurned) { await appendActiveEnergy(to: &allItems, predicate: predicate) }
+        if enabledTypes.contains(.sleepAnalysis) { await appendSleep(to: &allItems, predicate: predicate) }
+        if enabledTypes.contains(.respiratoryRate) { await appendRespiratoryRate(to: &allItems, predicate: predicate) }
+
         return allItems
     }
     
     // MARK: - Individual Fetch Methods
     
-    private func appendSteps(to items: inout [HealthDataItem], for date: Date) async {
+    private func appendSteps(to items: inout [HealthDataItem], predicate: NSPredicate) async {
         guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
-        
-        let predicate = createDayPredicate(for: date)
-        
+
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
             let stepItems = samples.compactMap { sample -> HealthDataItem? in
@@ -96,11 +112,9 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func appendWeight(to items: inout [HealthDataItem], for date: Date) async {
+    private func appendWeight(to items: inout [HealthDataItem], predicate: NSPredicate) async {
         guard let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) else { return }
-        
-        let predicate = createDayPredicate(for: date)
-        
+
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
             let weightItems = samples.compactMap { sample -> HealthDataItem? in
@@ -120,11 +134,9 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func appendHeartRate(to items: inout [HealthDataItem], for date: Date) async {
+    private func appendHeartRate(to items: inout [HealthDataItem], predicate: NSPredicate) async {
         guard let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
-        
-        let predicate = createDayPredicate(for: date)
-        
+
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
             let heartRateItems = samples.compactMap { sample -> HealthDataItem? in
@@ -144,10 +156,9 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func appendBloodPressure(to items: inout [HealthDataItem], for date: Date) async {
+    private func appendBloodPressure(to items: inout [HealthDataItem], predicate: NSPredicate) async {
         // Fetch systolic
         if let systolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic) {
-            let predicate = createDayPredicate(for: date)
             do {
                 let samples = try await fetchSamples(type: systolicType, predicate: predicate)
                 let bpItems = samples.compactMap { sample -> HealthDataItem? in
@@ -167,7 +178,6 @@ class HealthKitManager: ObservableObject {
         
         // Fetch diastolic
         if let diastolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic) {
-            let predicate = createDayPredicate(for: date)
             do {
                 let samples = try await fetchSamples(type: diastolicType, predicate: predicate)
                 let bpItems = samples.compactMap { sample -> HealthDataItem? in
@@ -186,11 +196,9 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func appendOxygenSaturation(to items: inout [HealthDataItem], for date: Date) async {
+    private func appendOxygenSaturation(to items: inout [HealthDataItem], predicate: NSPredicate) async {
         guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
-        
-        let predicate = createDayPredicate(for: date)
-        
+
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
             let o2Items = samples.compactMap { sample -> HealthDataItem? in
@@ -210,11 +218,9 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func appendActiveEnergy(to items: inout [HealthDataItem], for date: Date) async {
+    private func appendActiveEnergy(to items: inout [HealthDataItem], predicate: NSPredicate) async {
         guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
-        
-        let predicate = createDayPredicate(for: date)
-        
+
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
             let energyItems = samples.compactMap { sample -> HealthDataItem? in
@@ -234,11 +240,9 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func appendSleep(to items: inout [HealthDataItem], for date: Date) async {
+    private func appendSleep(to items: inout [HealthDataItem], predicate: NSPredicate) async {
         guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return }
-        
-        let predicate = createDayPredicate(for: date)
-        
+
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
             let sleepItems = samples.compactMap { sample -> HealthDataItem? in
@@ -259,11 +263,9 @@ class HealthKitManager: ObservableObject {
         }
     }
     
-    private func appendRespiratoryRate(to items: inout [HealthDataItem], for date: Date) async {
+    private func appendRespiratoryRate(to items: inout [HealthDataItem], predicate: NSPredicate) async {
         guard let type = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) else { return }
-        
-        let predicate = createDayPredicate(for: date)
-        
+
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
             let rateItems = samples.compactMap { sample -> HealthDataItem? in
@@ -336,6 +338,10 @@ class HealthKitManager: ObservableObject {
     
     // MARK: - Helpers
     
+    nonisolated func createRangePredicate(from startDate: Date, to endDate: Date) -> NSPredicate {
+        HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
+    }
+
     nonisolated private func createDayPredicate(for date: Date) -> NSPredicate {
         let calendar = Calendar.current
         let startDate = calendar.startOfDay(for: date)

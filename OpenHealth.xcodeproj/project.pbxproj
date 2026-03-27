@@ -14,6 +14,7 @@
 		1A2B3C4D5E6F7G8H9I0J1K2T /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7G8H9I0J1K2U /* DashboardView.swift */; };
 		1A2B3C4D5E6F7G8H9I0J1K2V /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7G8H9I0J1K2W /* SettingsView.swift */; };
 		1A2B3C4D5E6F7G8H9I0J1K2X /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7G8H9I0J1K2Y /* ExportView.swift */; };
+		1A2B3C4D5E6F7G8H9I0J1K40 /* SensorDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7G8H9I0J1K41 /* SensorDetailView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -24,6 +25,7 @@
 		1A2B3C4D5E6F7G8H9I0J1K2U /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K2W /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K2Y /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
+		1A2B3C4D5E6F7G8H9I0J1K41 /* SensorDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorDetailView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K2Z /* OpenHealth.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenHealth.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -88,6 +90,7 @@
 				1A2B3C4D5E6F7G8H9I0J1K2U /* DashboardView.swift */,
 				1A2B3C4D5E6F7G8H9I0J1K2W /* SettingsView.swift */,
 				1A2B3C4D5E6F7G8H9I0J1K2Y /* ExportView.swift */,
+				1A2B3C4D5E6F7G8H9I0J1K41 /* SensorDetailView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -167,6 +170,7 @@
 				1A2B3C4D5E6F7G8H9I0J1K2T /* DashboardView.swift in Sources */,
 				1A2B3C4D5E6F7G8H9I0J1K2V /* SettingsView.swift in Sources */,
 				1A2B3C4D5E6F7G8H9I0J1K2X /* ExportView.swift in Sources */,
+				1A2B3C4D5E6F7G8H9I0J1K40 /* SensorDetailView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
