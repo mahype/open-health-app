@@ -128,7 +128,9 @@ struct ExportView: View {
         encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = .prettyPrinted
         
-        let data = try encoder.encode(items)
+        // Convert to exportable format
+        let exportItems = items.map { HealthDataExportItem(from: $0) }
+        let data = try encoder.encode(exportItems)
         
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(filename)

@@ -136,37 +136,29 @@ struct DashboardView: View {
         isLoading = true
         
         Task {
-            do {
-                // Fetch all data for today
-                let items = try await healthKitManager.fetchAllData(for: Date())
-                
-                // Save to SwiftData
-                for item in items {
-                    // Check if item already exists
-                    let existing = healthItems.first { $0.id == item.id }
-                    if existing == nil {
-                        modelContext.insert(item)
-                    }
+            // Fetch all data for today
+            let items = await healthKitManager.fetchAllData(for: Date())
+            
+            // Save to SwiftData
+            for item in items {
+                // Check if item already exists
+                let existing = healthItems.first { $0.id == item.id }
+                if existing == nil {
+                    modelContext.insert(item)
                 }
-                
-                // Fetch aggregated stats
-                let steps = try await healthKitManager.fetchStepCount(for: Date())
-                
-                // Calculate average heart rate from fetched items
-                let heartRateItems = items.filter { $0.type == .heartRate }
-                let avgHeartRate = heartRateItems.isEmpty ? 0 : heartRateItems.map { $0.value }.reduce(0, +) / Double(heartRateItems.count)
-                
-                await MainActor.run {
-                    self.todaySteps = steps
-                    self.todayHeartRate = avgHeartRate
-                    self.isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.errorMessage = error.localizedDescription
-                    self.showError = true
-                    self.isLoading = false
-                }
+            }
+            
+            // Fetch aggregated stats
+            let steps = await healthKitManager.fetchStepCount(for: Date())
+            
+            // Calculate average heart rate from fetched items
+            let heartRateItems = items.filter { $0.type == .heartRate }
+            let avgHeartRate = heartRateItems.isEmpty ? 0 : heartRateItems.map { $0.value }.reduce(0, +) / Double(heartRateItems.count)
+            
+            await MainActor.run {
+                self.todaySteps = steps
+                self.todayHeartRate = avgHeartRate
+                self.isLoading = false
             }
         }
     }
@@ -209,7 +201,7 @@ struct HealthDataRow: View {
     var body: some View {
         HStack {
             Image(systemName: item.type.icon)
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
                 .frame(width: 32)
             
             VStack(alignment: .leading) {

@@ -91,3 +91,25 @@ enum HealthDataType: String, Codable, CaseIterable, Identifiable {
         }
     }
 }
+
+// MARK: - Export Model
+
+struct HealthDataExportItem: Codable {
+    let id: String
+    let type: String
+    let value: Double
+    let unit: String
+    let startDate: Date
+    let endDate: Date
+    let source: String
+    
+    init(from item: HealthDataItem) {
+        self.id = item.id.uuidString
+        self.type = item.type.rawValue
+        self.value = item.value
+        self.unit = item.unit
+        self.startDate = item.startDate
+        self.endDate = item.endDate
+        self.source = item.source
+    }
+}

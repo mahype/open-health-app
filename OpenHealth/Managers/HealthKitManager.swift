@@ -1,501 +1,6 @@
 import Foundation
 import HealthKit
 
-class HealthKitManager: ObservableObject {
-    static let shared = HealthKitManager()
-    let healthStore = HKHealthStore()
-    
-    @Published var authorizationStatus: HKAuthorizationStatus = .notDetermined
-    @Published var isAuthorized = false
-    
-    // MARK: - Authorization
-    
-    func requestAuthorization() async throws {
-        guard HKHealthStore.isHealthDataAvailable() else {
-            throw HealthError.healthDataNotAvailable
-        }
-        
-        let typesToRead: Set<HKObjectType> = [
-            HKObjectType.quantityType(forIdentifier: .stepCount)!,
-            HKObjectType.quantityType(forIdentifier: .bodyMass)!,
-            HKObjectType.quantityType(forIdentifier: .heartRate)!,
-            HKObjectType.quantityType(forIdentifier: .bloodPressureSystolic)!,
-            HKObjectType.quantityType(forIdentifier: .bloodPressureDiastolic)!,
-            HKObjectType.quantityType(forIdentifier: .oxygenSaturation)!,
-            HKObjectType.quantityType(forIdentifier: .activeEnergyBurned)!,
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!,
-            HKObjectType.quantityType(forIdentifier: .respiratoryRate)!
-        ].compactMap { $0 as HKObjectType? }
-        
-        try await healthStore.requestAuthorization(toShare: nil, read: typesToRead)
-        
-        await MainActor.run {
-            self.isAuthorized = true
-        }
-    }
-    
-    // MARK: - Fetch All Data Types
-    
-    func fetchAllData(for date: Date) async throws -> [HealthDataItem] {
-        var allItems: [HealthDataItem] = []
-        
-        // Fetch all data types
-        async let steps = fetchSteps(for: date)
-        async let weight = fetchWeight(for: date)
-        async let heartRate = fetchHeartRate(for: date)
-        async let bloodPressure = fetchBloodPressure(for: date)
-        async let oxygenSaturation = fetchOxygenSaturation(for: date)
-        async let activeEnergy = fetchActiveEnergy(for: date)
-        async let sleep = fetchSleep(for: date)
-        async let respiratoryRate = fetchRespiratoryRate(for: date)
-        
-        // Combine results
-        allItems += (try? await steps) ?? []
-        allItems += (try? await weight) ?? []
-        allItems += (try? await heartRate) ?? []
-        allItems += (try? await bloodPressure) ?? []
-        allItems += (try? await oxygenSaturation) ?? []
-        allItems += (try? await activeEnergy) ?? []
-        allItems += (try? await sleep) ?? []
-        allItems += (try? await respiratoryRate) ?? []
-        
-        return allItems
-    }
-    
-    // MARK: - Individual Fetch Methods
-    
-    func fetchSteps(for date: Date) async throws -> [HealthDataItem] {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
-            return []
-        }
-        
-        let predicate = createDayPredicate(for: date)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
-            ) { _, samples, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                
-                let items = (samples as? [HKQuantitySample])?.map { sample in
-                    HealthDataItem(
-                        type: .stepCount,
-                        value: sample.quantity.doubleValue(for: .count()),
-                        unit: "count",
-                        startDate: sample.startDate,
-                        endDate: sample.endDate,
-                        source: sample.sourceRevision.source.name
-                    )
-                } ?? []
-                
-                continuation.resume(returning: items)
-            }
-            
-            self.healthStore.execute(query)
-        }
-    }
-    
-    func fetchWeight(for date: Date) async throws -> [HealthDataItem] {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) else {
-            return []
-        }
-        
-        let predicate = createDayPredicate(for: date)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
-            ) { _, samples, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                
-                let items = (samples as? [HKQuantitySample])?.map { sample in
-                    HealthDataItem(
-                        type: .bodyMass,
-                        value: sample.quantity.doubleValue(for: .gramUnit(with: .kilo)),
-                        unit: "kg",
-                        startDate: sample.startDate,
-                        endDate: sample.endDate,
-                        source: sample.sourceRevision.source.name
-                    )
-                } ?? []
-                
-                continuation.resume(returning: items)
-            }
-            
-            self.healthStore.execute(query)
-        }
-    }
-    
-    func fetchHeartRate(for date: Date) async throws -> [HealthDataItem] {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else {
-            return []
-        }
-        
-        let predicate = createDayPredicate(for: date)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
-            ) { _, samples, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                
-                let items = (samples as? [HKQuantitySample])?.map { sample in
-                    HealthDataItem(
-                        type: .heartRate,
-                        value: sample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())),
-                        unit: "bpm",
-                        startDate: sample.startDate,
-                        endDate: sample.endDate,
-                        source: sample.sourceRevision.source.name
-                    )
-                } ?? []
-                
-                continuation.resume(returning: items)
-            }
-            
-            self.healthStore.execute(query)
-        }
-    }
-    
-    func fetchBloodPressure(for date: Date) async throws -> [HealthDataItem] {
-        var items: [HealthDataItem] = []
-        
-        // Fetch systolic
-        if let systolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic) {
-            let predicate = createDayPredicate(for: date)
-            
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                let query = HKSampleQuery(
-                    sampleType: systolicType,
-                    predicate: predicate,
-                    limit: HKObjectQueryNoLimit,
-                    sortDescriptors: nil
-                ) { _, samples, error in
-                    if let error = error {
-                        continuation.resume(throwing: error)
-                        return
-                    }
-                    
-                    let systolicItems = (samples as? [HKQuantitySample])?.map { sample in
-                        HealthDataItem(
-                            type: .bloodPressureSystolic,
-                            value: sample.quantity.doubleValue(for: .millimeterOfMercury()),
-                            unit: "mmHg",
-                            startDate: sample.startDate,
-                            endDate: sample.endDate,
-                            source: sample.sourceRevision.source.name
-                        )
-                    } ?? []
-                    items += systolicItems
-                    continuation.resume()
-                }
-                
-                self.healthStore.execute(query)
-            }
-        }
-        
-        // Fetch diastolic
-        if let diastolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic) {
-            let predicate = createDayPredicate(for: date)
-            
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                let query = HKSampleQuery(
-                    sampleType: diastolicType,
-                    predicate: predicate,
-                    limit: HKObjectQueryNoLimit,
-                    sortDescriptors: nil
-                ) { _, samples, error in
-                    if let error = error {
-                        continuation.resume(throwing: error)
-                        return
-                    }
-                    
-                    let diastolicItems = (samples as? [HKQuantitySample])?.map { sample in
-                        HealthDataItem(
-                            type: .bloodPressureDiastolic,
-                            value: sample.quantity.doubleValue(for: .millimeterOfMercury()),
-                            unit: "mmHg",
-                            startDate: sample.startDate,
-                            endDate: sample.endDate,
-                            source: sample.sourceRevision.source.name
-                        )
-                    } ?? []
-                    items += diastolicItems
-                    continuation.resume()
-                }
-                
-                self.healthStore.execute(query)
-            }
-        }
-        
-        return items
-    }
-    
-    func fetchOxygenSaturation(for date: Date) async throws -> [HealthDataItem] {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else {
-            return []
-        }
-        
-        let predicate = createDayPredicate(for: date)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
-            ) { _, samples, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                
-                let items = (samples as? [HKQuantitySample])?.map { sample in
-                    HealthDataItem(
-                        type: .oxygenSaturation,
-                        value: sample.quantity.doubleValue(for: .percent()) * 100,
-                        unit: "%",
-                        startDate: sample.startDate,
-                        endDate: sample.endDate,
-                        source: sample.sourceRevision.source.name
-                    )
-                } ?? []
-                
-                continuation.resume(returning: items)
-            }
-            
-            self.healthStore.execute(query)
-        }
-    }
-    
-    func fetchActiveEnergy(for date: Date) async throws -> [HealthDataItem] {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else {
-            return []
-        }
-        
-        let predicate = createDayPredicate(for: date)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
-            ) { _, samples, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                
-                let items = (samples as? [HKQuantitySample])?.map { sample in
-                    HealthDataItem(
-                        type: .activeEnergyBurned,
-                        value: sample.quantity.doubleValue(for: .kilocalorie()),
-                        unit: "kcal",
-                        startDate: sample.startDate,
-                        endDate: sample.endDate,
-                        source: sample.sourceRevision.source.name
-                    )
-                } ?? []
-                
-                continuation.resume(returning: items)
-            }
-            
-            self.healthStore.execute(query)
-        }
-    }
-    
-    func fetchSleep(for date: Date) async throws -> [HealthDataItem] {
-        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else {
-            return []
-        }
-        
-        let predicate = createDayPredicate(for: date)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
-            ) { _, samples, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                
-                let items = (samples as? [HKCategorySample])?.map { sample in
-                    let hours = sample.endDate.timeIntervalSince(sample.startDate) / 3600
-                    return HealthDataItem(
-                        type: .sleepAnalysis,
-                        value: hours,
-                        unit: "hours",
-                        startDate: sample.startDate,
-                        endDate: sample.endDate,
-                        source: sample.sourceRevision.source.name
-                    )
-                } ?? []
-                
-                continuation.resume(returning: items)
-            }
-            
-            self.healthStore.execute(query)
-        }
-    }
-    
-    func fetchRespiratoryRate(for date: Date) async throws -> [HealthDataItem] {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) else {
-            return []
-        }
-        
-        let predicate = createDayPredicate(for: date)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKSampleQuery(
-                sampleType: type,
-                predicate: predicate,
-                limit: HKObjectQueryNoLimit,
-                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
-            ) { _, samples, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                
-                let items = (samples as? [HKQuantitySample])?.map { sample in
-                    HealthDataItem(
-                        type: .respiratoryRate,
-                        value: sample.quantity.doubleValue(for: .count().unitDivided(by: .minute())),
-                        unit: "breaths/min",
-                        startDate: sample.startDate,
-                        endDate: sample.endDate,
-                        source: sample.sourceRevision.source.name
-                    )
-                } ?? []
-                
-                continuation.resume(returning: items)
-            }
-            
-            self.healthStore.execute(query)
-        }
-    }
-    
-    // MARK: - Helper Methods
-    
-    private func createDayPredicate(for date: Date) -> NSPredicate {
-        let calendar = Calendar.current
-        let startDate = calendar.startOfDay(for: date)
-        let endDate = calendar.date(byAdding: .day, value: 1, to: startDate)!
-        
-        return HKQuery.predicateForSamples(
-            withStart: startDate,
-            end: endDate,
-            options: .strictStartDate
-        )
-    }
-    
-    // MARK: - Statistics (Aggregated Data)
-    
-    func fetchStepCount(for date: Date) async throws -> Double {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
-            return 0
-        }
-        
-        let predicate = createDayPredicate(for: date)
-        
-        return try await withCheckedThrowingContinuation { continuation in
-            let query = HKStatisticsQuery(
-                quantityType: type,
-                quantitySamplePredicate: predicate,
-                options: .cumulativeSum
-            ) { _, statistics, error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                    return
-                }
-                
-                let sum = statistics?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
-                continuation.resume(returning: sum)
-            }
-            
-            self.healthStore.execute(query)
-        }
-    }
-    
-    // MARK: - Helper
-    
-    func checkAuthorizationStatus() {
-        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
-        let status = healthStore.authorizationStatus(for: stepType)
-        self.authorizationStatus = status
-        self.isAuthorized = status == .sharingAuthorized
-    }
-    
-    // MARK: - Background Delivery (Observer Queries)
-    
-    func setupBackgroundDelivery(for type: HealthDataType, completion: @escaping () -> Void) {
-        let hkType: HKSampleType?
-        
-        switch type {
-        case .stepCount:
-            hkType = HKQuantityType.quantityType(forIdentifier: .stepCount)
-        case .bodyMass:
-            hkType = HKQuantityType.quantityType(forIdentifier: .bodyMass)
-        case .heartRate, .restingHeartRate:
-            hkType = HKQuantityType.quantityType(forIdentifier: .heartRate)
-        case .bloodPressureSystolic, .bloodPressureDiastolic:
-            hkType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic)
-        case .oxygenSaturation:
-            hkType = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)
-        case .activeEnergyBurned:
-            hkType = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)
-        case .sleepAnalysis:
-            hkType = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)
-        case .respiratoryRate:
-            hkType = HKQuantityType.quantityType(forIdentifier: .respiratoryRate)
-        }
-        
-        guard let sampleType = hkType else { return }
-        
-        let query = HKObserverQuery(sampleType: sampleType, predicate: nil) { [weak self] _, completionHandler, error in
-            if let error = error {
-                print("Observer query error: \(error)")
-                completionHandler()
-                return
-            }
-            
-            completion()
-            completionHandler()
-        }
-        
-        healthStore.execute(query)
-        
-        healthStore.enableBackgroundDelivery(for: sampleType, frequency: .immediate) { success, error in
-            if let error = error {
-                print("Background delivery error: \(error)")
-            }
-        }
-    }
-}
-
 // MARK: - Errors
 
 enum HealthError: Error, LocalizedError {
@@ -512,5 +17,341 @@ enum HealthError: Error, LocalizedError {
         case .authorizationDenied:
             return "Zugriff auf Gesundheitsdaten wurde verweigert."
         }
+    }
+}
+
+// MARK: - HealthKit Manager
+
+@MainActor
+class HealthKitManager: ObservableObject {
+    static let shared = HealthKitManager()
+    let healthStore = HKHealthStore()
+    
+    @Published var authorizationStatus: HKAuthorizationStatus = .notDetermined
+    @Published var isAuthorized = false
+    
+    // MARK: - Authorization
+    
+    func requestAuthorization() async throws {
+        guard HKHealthStore.isHealthDataAvailable() else {
+            throw HealthError.healthDataNotAvailable
+        }
+        
+        let typesToRead: Set<HKSampleType> = [
+            HKQuantityType.quantityType(forIdentifier: .stepCount)!,
+            HKQuantityType.quantityType(forIdentifier: .bodyMass)!,
+            HKQuantityType.quantityType(forIdentifier: .heartRate)!,
+            HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic)!,
+            HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic)!,
+            HKQuantityType.quantityType(forIdentifier: .oxygenSaturation)!,
+            HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned)!,
+            HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!,
+            HKQuantityType.quantityType(forIdentifier: .respiratoryRate)!
+        ]
+        
+        try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+        self.isAuthorized = true
+    }
+    
+    // MARK: - Fetch Data
+    
+    func fetchAllData(for date: Date) async -> [HealthDataItem] {
+        var allItems: [HealthDataItem] = []
+        
+        await appendSteps(to: &allItems, for: date)
+        await appendWeight(to: &allItems, for: date)
+        await appendHeartRate(to: &allItems, for: date)
+        await appendBloodPressure(to: &allItems, for: date)
+        await appendOxygenSaturation(to: &allItems, for: date)
+        await appendActiveEnergy(to: &allItems, for: date)
+        await appendSleep(to: &allItems, for: date)
+        await appendRespiratoryRate(to: &allItems, for: date)
+        
+        return allItems
+    }
+    
+    // MARK: - Individual Fetch Methods
+    
+    private func appendSteps(to items: inout [HealthDataItem], for date: Date) async {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+        
+        let predicate = createDayPredicate(for: date)
+        
+        do {
+            let samples = try await fetchSamples(type: type, predicate: predicate)
+            let stepItems = samples.compactMap { sample -> HealthDataItem? in
+                guard let quantitySample = sample as? HKQuantitySample else { return nil }
+                return HealthDataItem(
+                    type: .stepCount,
+                    value: quantitySample.quantity.doubleValue(for: .count()),
+                    unit: "count",
+                    startDate: quantitySample.startDate,
+                    endDate: quantitySample.endDate,
+                    source: quantitySample.sourceRevision.source.name
+                )
+            }
+            items.append(contentsOf: stepItems)
+        } catch {
+            print("Error fetching steps: \(error)")
+        }
+    }
+    
+    private func appendWeight(to items: inout [HealthDataItem], for date: Date) async {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) else { return }
+        
+        let predicate = createDayPredicate(for: date)
+        
+        do {
+            let samples = try await fetchSamples(type: type, predicate: predicate)
+            let weightItems = samples.compactMap { sample -> HealthDataItem? in
+                guard let quantitySample = sample as? HKQuantitySample else { return nil }
+                return HealthDataItem(
+                    type: .bodyMass,
+                    value: quantitySample.quantity.doubleValue(for: .gramUnit(with: .kilo)),
+                    unit: "kg",
+                    startDate: quantitySample.startDate,
+                    endDate: quantitySample.endDate,
+                    source: quantitySample.sourceRevision.source.name
+                )
+            }
+            items.append(contentsOf: weightItems)
+        } catch {
+            print("Error fetching weight: \(error)")
+        }
+    }
+    
+    private func appendHeartRate(to items: inout [HealthDataItem], for date: Date) async {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
+        
+        let predicate = createDayPredicate(for: date)
+        
+        do {
+            let samples = try await fetchSamples(type: type, predicate: predicate)
+            let heartRateItems = samples.compactMap { sample -> HealthDataItem? in
+                guard let quantitySample = sample as? HKQuantitySample else { return nil }
+                return HealthDataItem(
+                    type: .heartRate,
+                    value: quantitySample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())),
+                    unit: "bpm",
+                    startDate: quantitySample.startDate,
+                    endDate: quantitySample.endDate,
+                    source: quantitySample.sourceRevision.source.name
+                )
+            }
+            items.append(contentsOf: heartRateItems)
+        } catch {
+            print("Error fetching heart rate: \(error)")
+        }
+    }
+    
+    private func appendBloodPressure(to items: inout [HealthDataItem], for date: Date) async {
+        // Fetch systolic
+        if let systolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic) {
+            let predicate = createDayPredicate(for: date)
+            do {
+                let samples = try await fetchSamples(type: systolicType, predicate: predicate)
+                let bpItems = samples.compactMap { sample -> HealthDataItem? in
+                    guard let quantitySample = sample as? HKQuantitySample else { return nil }
+                    return HealthDataItem(
+                        type: .bloodPressureSystolic,
+                        value: quantitySample.quantity.doubleValue(for: .millimeterOfMercury()),
+                        unit: "mmHg",
+                        startDate: quantitySample.startDate,
+                        endDate: quantitySample.endDate,
+                        source: quantitySample.sourceRevision.source.name
+                    )
+                }
+                items.append(contentsOf: bpItems)
+            } catch {}
+        }
+        
+        // Fetch diastolic
+        if let diastolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic) {
+            let predicate = createDayPredicate(for: date)
+            do {
+                let samples = try await fetchSamples(type: diastolicType, predicate: predicate)
+                let bpItems = samples.compactMap { sample -> HealthDataItem? in
+                    guard let quantitySample = sample as? HKQuantitySample else { return nil }
+                    return HealthDataItem(
+                        type: .bloodPressureDiastolic,
+                        value: quantitySample.quantity.doubleValue(for: .millimeterOfMercury()),
+                        unit: "mmHg",
+                        startDate: quantitySample.startDate,
+                        endDate: quantitySample.endDate,
+                        source: quantitySample.sourceRevision.source.name
+                    )
+                }
+                items.append(contentsOf: bpItems)
+            } catch {}
+        }
+    }
+    
+    private func appendOxygenSaturation(to items: inout [HealthDataItem], for date: Date) async {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
+        
+        let predicate = createDayPredicate(for: date)
+        
+        do {
+            let samples = try await fetchSamples(type: type, predicate: predicate)
+            let o2Items = samples.compactMap { sample -> HealthDataItem? in
+                guard let quantitySample = sample as? HKQuantitySample else { return nil }
+                return HealthDataItem(
+                    type: .oxygenSaturation,
+                    value: quantitySample.quantity.doubleValue(for: .percent()) * 100,
+                    unit: "%",
+                    startDate: quantitySample.startDate,
+                    endDate: quantitySample.endDate,
+                    source: quantitySample.sourceRevision.source.name
+                )
+            }
+            items.append(contentsOf: o2Items)
+        } catch {
+            print("Error fetching oxygen saturation: \(error)")
+        }
+    }
+    
+    private func appendActiveEnergy(to items: inout [HealthDataItem], for date: Date) async {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
+        
+        let predicate = createDayPredicate(for: date)
+        
+        do {
+            let samples = try await fetchSamples(type: type, predicate: predicate)
+            let energyItems = samples.compactMap { sample -> HealthDataItem? in
+                guard let quantitySample = sample as? HKQuantitySample else { return nil }
+                return HealthDataItem(
+                    type: .activeEnergyBurned,
+                    value: quantitySample.quantity.doubleValue(for: .kilocalorie()),
+                    unit: "kcal",
+                    startDate: quantitySample.startDate,
+                    endDate: quantitySample.endDate,
+                    source: quantitySample.sourceRevision.source.name
+                )
+            }
+            items.append(contentsOf: energyItems)
+        } catch {
+            print("Error fetching active energy: \(error)")
+        }
+    }
+    
+    private func appendSleep(to items: inout [HealthDataItem], for date: Date) async {
+        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return }
+        
+        let predicate = createDayPredicate(for: date)
+        
+        do {
+            let samples = try await fetchSamples(type: type, predicate: predicate)
+            let sleepItems = samples.compactMap { sample -> HealthDataItem? in
+                guard let categorySample = sample as? HKCategorySample else { return nil }
+                let hours = categorySample.endDate.timeIntervalSince(categorySample.startDate) / 3600
+                return HealthDataItem(
+                    type: .sleepAnalysis,
+                    value: hours,
+                    unit: "hours",
+                    startDate: categorySample.startDate,
+                    endDate: categorySample.endDate,
+                    source: categorySample.sourceRevision.source.name
+                )
+            }
+            items.append(contentsOf: sleepItems)
+        } catch {
+            print("Error fetching sleep: \(error)")
+        }
+    }
+    
+    private func appendRespiratoryRate(to items: inout [HealthDataItem], for date: Date) async {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) else { return }
+        
+        let predicate = createDayPredicate(for: date)
+        
+        do {
+            let samples = try await fetchSamples(type: type, predicate: predicate)
+            let rateItems = samples.compactMap { sample -> HealthDataItem? in
+                guard let quantitySample = sample as? HKQuantitySample else { return nil }
+                return HealthDataItem(
+                    type: .respiratoryRate,
+                    value: quantitySample.quantity.doubleValue(for: HKUnit.count().unitDivided(by: .minute())),
+                    unit: "breaths/min",
+                    startDate: quantitySample.startDate,
+                    endDate: quantitySample.endDate,
+                    source: quantitySample.sourceRevision.source.name
+                )
+            }
+            items.append(contentsOf: rateItems)
+        } catch {
+            print("Error fetching respiratory rate: \(error)")
+        }
+    }
+    
+    // MARK: - Generic Fetch
+    
+    nonisolated private func fetchSamples(type: HKSampleType, predicate: NSPredicate) async throws -> [HKSample] {
+        try await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: type,
+                predicate: predicate,
+                limit: HKObjectQueryNoLimit,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
+            ) { _, samples, error in
+                if let error = error {
+                    continuation.resume(throwing: error)
+                } else {
+                    continuation.resume(returning: samples ?? [])
+                }
+            }
+            self.healthStore.execute(query)
+        }
+    }
+    
+    // MARK: - Statistics
+    
+    func fetchStepCount(for date: Date) async -> Double {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
+            return 0
+        }
+        
+        let predicate = createDayPredicate(for: date)
+        
+        do {
+            return try await withCheckedThrowingContinuation { continuation in
+                let query = HKStatisticsQuery(
+                    quantityType: type,
+                    quantitySamplePredicate: predicate,
+                    options: .cumulativeSum
+                ) { _, statistics, error in
+                    if let error = error {
+                        continuation.resume(throwing: error)
+                    } else {
+                        let sum = statistics?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
+                        continuation.resume(returning: sum)
+                    }
+                }
+                self.healthStore.execute(query)
+            }
+        } catch {
+            print("Error fetching step count: \(error)")
+            return 0
+        }
+    }
+    
+    // MARK: - Helpers
+    
+    nonisolated private func createDayPredicate(for date: Date) -> NSPredicate {
+        let calendar = Calendar.current
+        let startDate = calendar.startOfDay(for: date)
+        let endDate = calendar.date(byAdding: .day, value: 1, to: startDate)!
+        
+        return HKQuery.predicateForSamples(
+            withStart: startDate,
+            end: endDate,
+            options: .strictStartDate
+        )
+    }
+    
+    func checkAuthorizationStatus() {
+        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
+        let status = healthStore.authorizationStatus(for: stepType)
+        self.authorizationStatus = status
+        self.isAuthorized = status == .sharingAuthorized
     }
 }
