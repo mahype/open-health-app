@@ -4,12 +4,15 @@ import Charts
 
 struct DashboardView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var healthItems: [HealthDataItem]
+    @Query(sort: \HealthDataItem.startDate, order: .reverse) private var healthItems: [HealthDataItem]
     
     @StateObject private var healthKitManager = HealthKitManager.shared
     @State private var selectedDate = Date()
     @State private var isLoading = false
     @State private var errorMessage: String?
+    @State private var todaySteps: Double = 0
+    @State private var todayHeartRate: Double = 0
+    @State private var showError = false
     
     var body: some View {
         NavigationStack {
@@ -29,15 +32,21 @@ struct DashboardView: View {
             .navigationTitle("OpenHealth")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button(action: { loadData() }) {
+                    Button(action: { loadTodayData() }) {
                         Image(systemName: "arrow.clockwise")
                     }
                     .disabled(isLoading)
                 }
             }
+            .alert("Fehler", isPresented: $showError, presenting: errorMessage) { _ in
+                Button("OK", role: .cancel) {}
+            } message: { message in
+                Text(message)
+            }
         }
         .onAppear {
             healthKitManager.checkAuthorizationStatus()
+            loadTodayData()
         }
     }
     
@@ -64,8 +73,10 @@ struct DashboardView: View {
                     Task {
                         do {
                             try await healthKitManager.requestAuthorization()
+                            await loadTodayData()
                         } catch {
                             errorMessage = error.localizedDescription
+                            showError = true
                         }
                     }
                 }
@@ -82,14 +93,14 @@ struct DashboardView: View {
         LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
             StatCard(
                 title: "Heutige Schritte",
-                value: "0",
+                value: String(format: "%.0f", todaySteps),
                 icon: "figure.walk",
                 color: .blue
             )
             
             StatCard(
-                title: "Herzfrequenz",
-                value: "--",
+                title: "Ø Herzfrequenz",
+                value: todayHeartRate > 0 ? String(format: "%.0f", todayHeartRate) : "--",
                 icon: "heart.fill",
                 color: .red
             )
@@ -101,34 +112,62 @@ struct DashboardView: View {
             Text("Letzte Daten")
                 .font(.headline)
             
-            if healthItems.isEmpty {
+            let todayItems = healthItems.filter { item in
+                Calendar.current.isDateInToday(item.startDate)
+            }
+            
+            if todayItems.isEmpty {
                 ContentUnavailableView(
                     "Keine Daten",
                     systemImage: "heart.text.square",
                     description: Text("Lade deine Gesundheitsdaten von HealthKit")
                 )
             } else {
-                ForEach(healthItems.prefix(5)) { item in
+                ForEach(todayItems.prefix(5)) { item in
                     HealthDataRow(item: item)
                 }
             }
         }
     }
     
-    private func loadData() {
+    private func loadTodayData() {
         guard healthKitManager.isAuthorized else { return }
         
         isLoading = true
+        
         Task {
             do {
-                let steps = try await healthKitManager.fetchSteps(for: selectedDate)
-                for item in steps {
-                    modelContext.insert(item)
+                // Fetch all data for today
+                let items = try await healthKitManager.fetchAllData(for: Date())
+                
+                // Save to SwiftData
+                for item in items {
+                    // Check if item already exists
+                    let existing = healthItems.first { $0.id == item.id }
+                    if existing == nil {
+                        modelContext.insert(item)
+                    }
+                }
+                
+                // Fetch aggregated stats
+                let steps = try await healthKitManager.fetchStepCount(for: Date())
+                
+                // Calculate average heart rate from fetched items
+                let heartRateItems = items.filter { $0.type == .heartRate }
+                let avgHeartRate = heartRateItems.isEmpty ? 0 : heartRateItems.map { $0.value }.reduce(0, +) / Double(heartRateItems.count)
+                
+                await MainActor.run {
+                    self.todaySteps = steps
+                    self.todayHeartRate = avgHeartRate
+                    self.isLoading = false
                 }
             } catch {
-                errorMessage = error.localizedDescription
+                await MainActor.run {
+                    self.errorMessage = error.localizedDescription
+                    self.showError = true
+                    self.isLoading = false
+                }
             }
-            isLoading = false
         }
     }
 }
