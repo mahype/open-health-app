@@ -172,7 +172,7 @@ enum TimeRange: String, CaseIterable, Identifiable {
     }
 }
 
-enum ExportFormat: String, CaseIterable, Identifiable {
+enum ExportFormat: String, CaseIterable, Identifiable, Hashable {
     case json, csv
     
     var id: String { rawValue }

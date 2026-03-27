@@ -432,7 +432,7 @@ class HealthKitManager: ObservableObject {
                     return
                 }
                 
-                let sum = statistics?.sumQuantity()?.doubleValue(for: .count()) ?? 0
+                let sum = statistics?.sumQuantity()?.doubleValue(for: HKUnit.count()) ?? 0
                 continuation.resume(returning: sum)
             }
             
@@ -445,11 +445,8 @@ class HealthKitManager: ObservableObject {
     func checkAuthorizationStatus() {
         guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
         let status = healthStore.authorizationStatus(for: stepType)
-        
-        await MainActor.run {
-            self.authorizationStatus = status
-            self.isAuthorized = status == .sharingAuthorized
-        }
+        self.authorizationStatus = status
+        self.isAuthorized = status == .sharingAuthorized
     }
     
     // MARK: - Background Delivery (Observer Queries)

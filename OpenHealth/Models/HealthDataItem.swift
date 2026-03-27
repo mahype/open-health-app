@@ -36,7 +36,7 @@ class HealthDataItem {
     }
 }
 
-enum HealthDataType: String, Codable, CaseIterable {
+enum HealthDataType: String, Codable, CaseIterable, Identifiable {
     case stepCount = "stepCount"
     case bodyMass = "bodyMass"
     case heartRate = "heartRate"
@@ -47,6 +47,8 @@ enum HealthDataType: String, Codable, CaseIterable {
     case activeEnergyBurned = "activeEnergyBurned"
     case sleepAnalysis = "sleepAnalysis"
     case respiratoryRate = "respiratoryRate"
+    
+    var id: String { rawValue }
     
     var displayName: String {
         switch self {
