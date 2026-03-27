@@ -17,7 +17,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		1A2B3C4D5E6F7G8H9I0J1K2Z /* OpenHealth.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenHealth.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		1A2B3C4D5E6F7G8H9I0J1K2M /* OpenHealthApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OpenHealthApp.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K2O /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K2Q /* HealthKitManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthKitManager.swift; sourceTree = "<group>"; };
@@ -25,6 +24,7 @@
 		1A2B3C4D5E6F7G8H9I0J1K2U /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K2W /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K2Y /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
+		1A2B3C4D5E6F7G8H9I0J1K2Z /* OpenHealth.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenHealth.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -295,6 +295,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"OpenHealth/Preview Content\"";
+				DEVELOPMENT_TEAM = 2GA7DQ3P3Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "OpenHealth benötigt Zugriff auf deine Gesundheitsdaten, um sie anzuzeigen und zu exportieren.";
@@ -325,6 +326,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_ASSET_PATHS = "\"OpenHealth/Preview Content\"";
+				DEVELOPMENT_TEAM = 2GA7DQ3P3Z;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_NSHealthShareUsageDescription = "OpenHealth benötigt Zugriff auf deine Gesundheitsdaten, um sie anzuzeigen und zu exportieren.";
@@ -349,20 +351,20 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1A2B3C4D5E6F7G8H9I0J1K3C /* Build configuration list for PBXProject "OpenHealth" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				1A2B3C4D5E6F7G8H9I0J1K3D /* Debug */,
-				1A2B3C4D5E6F7G8H9I0J1K3E /* Release */,
-			);
-			defaultConfigurationIsVisible = 0;
-			defaultConfigurationName = Release;
-		};
 		1A2B3C4D5E6F7G8H9I0J1K38 /* Build configuration list for PBXNativeTarget "OpenHealth" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1A2B3C4D5E6F7G8H9I0J1K3F /* Debug */,
 				1A2B3C4D5E6F7G8H9I0J1K3G /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		1A2B3C4D5E6F7G8H9I0J1K3C /* Build configuration list for PBXProject "OpenHealth" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				1A2B3C4D5E6F7G8H9I0J1K3D /* Debug */,
+				1A2B3C4D5E6F7G8H9I0J1K3E /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
