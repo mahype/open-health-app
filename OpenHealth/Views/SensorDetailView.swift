@@ -60,37 +60,49 @@ struct SensorDetailView: View {
                 .pickerStyle(.segmented)
                 .padding(.horizontal)
 
-                // Summary Card
-                summaryCard
-                    .padding(.horizontal)
-
-                // Chart
-                chartSection
-                    .padding(.horizontal)
-
-                // Blood Pressure Extras
-                if isBloodPressure {
-                    bpClassificationCard
+                if isLoading && !hasData {
+                    ProgressView("Lade Daten...")
+                        .padding(.top, 60)
+                } else {
+                    // Summary Card
+                    summaryCard
                         .padding(.horizontal)
 
-                    pulsePressureCard
+                    // Sleep Stage Breakdown
+                    if dataType == .sleepAnalysis && !isBloodPressure {
+                        sleepStageBreakdownCard
+                            .padding(.horizontal)
+                    }
+
+                    // Chart
+                    chartSection
+                        .padding(.horizontal)
+
+                    // Blood Pressure Extras
+                    if isBloodPressure {
+                        bpClassificationCard
+                            .padding(.horizontal)
+
+                        pulsePressureCard
+                            .padding(.horizontal)
+                    }
+
+                    // Recent Values
+                    recentValuesSection
                         .padding(.horizontal)
                 }
-
-                // Recent Values
-                recentValuesSection
-                    .padding(.horizontal)
             }
             .padding(.vertical)
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle(isBloodPressure ? "Blutdruck" : dataType.displayName)
         .navigationBarTitleDisplayMode(.large)
-        .overlay {
-            if isLoading {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .background(.ultraThinMaterial)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
             }
         }
         .task(id: selectedRange) {
@@ -99,6 +111,10 @@ struct SensorDetailView: View {
     }
 
     // MARK: - Filtered Data
+
+    private var hasData: Bool {
+        !filteredItems.isEmpty
+    }
 
     private var filteredItems: [HealthDataItem] {
         let start = selectedRange.startDate
@@ -123,6 +139,12 @@ struct SensorDetailView: View {
                 summaryItem(title: "Ø Systolisch", value: avgText(for: .bloodPressureSystolic))
                 Divider().frame(height: 40)
                 summaryItem(title: "Ø Diastolisch", value: avgText(for: .bloodPressureDiastolic))
+            } else if dataType == .sleepAnalysis {
+                summaryItem(title: "Letzte Nacht", value: sleepLastNightText)
+                Divider().frame(height: 40)
+                summaryItem(title: "Durchschnitt", value: sleepAvgText)
+                Divider().frame(height: 40)
+                summaryItem(title: "Nächte", value: "\(sleepNightCount)")
             } else {
                 summaryItem(title: "Aktuell", value: latestValueText)
                 Divider().frame(height: 40)
@@ -179,6 +201,8 @@ struct SensorDetailView: View {
                 noDataView
             } else if isBloodPressure {
                 bloodPressureChart
+            } else if dataType == .sleepAnalysis {
+                sleepStackedChart
             } else if dataType.usesBarChart {
                 barChart
             } else {
@@ -436,11 +460,13 @@ struct SensorDetailView: View {
 
     private var recentValuesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Letzte Werte")
+            Text(dataType == .sleepAnalysis ? "Letzte Nächte" : "Letzte Werte")
                 .font(.headline)
 
             if isBloodPressure {
                 recentBPList
+            } else if dataType == .sleepAnalysis {
+                recentSleepNightsList
             } else {
                 recentSingleList
             }
@@ -518,6 +544,165 @@ struct SensorDetailView: View {
                 && abs($0.startDate.timeIntervalSince(sys.startDate)) < 60
             }) else { return nil }
             return (date: sys.startDate, systolic: sys.value, diastolic: dia.value)
+        }
+    }
+
+    // MARK: - Sleep Helpers
+
+    private var sleepNights: [(date: Date, items: [HealthDataItem])] {
+        let calendar = Calendar.current
+        let sleepItems = filteredItems.filter { $0.type == .sleepAnalysis }
+        let grouped = Dictionary(grouping: sleepItems) { calendar.startOfDay(for: $0.endDate) }
+        return grouped.map { (date: $0.key, items: $0.value) }
+            .sorted { $0.date > $1.date }
+    }
+
+    private var sleepLastNightText: String {
+        guard let lastNight = sleepNights.first else { return "--" }
+        let total = lastNight.items.map(\.value).reduce(0, +)
+        return dataType.formattedValue(total)
+    }
+
+    private var sleepAvgText: String {
+        let nights = sleepNights
+        guard !nights.isEmpty else { return "--" }
+        let totals = nights.map { $0.items.map(\.value).reduce(0, +) }
+        let avg = totals.reduce(0, +) / Double(totals.count)
+        return dataType.formattedValue(avg)
+    }
+
+    private var sleepNightCount: Int {
+        sleepNights.count
+    }
+
+    private var sleepStageAggregates: [(id: String, date: Date, stage: SleepStage, value: Double)] {
+        let calendar = Calendar.current
+        let sleepItems = filteredItems.filter { $0.type == .sleepAnalysis }
+        let grouped = Dictionary(grouping: sleepItems) { calendar.startOfDay(for: $0.endDate) }
+
+        var result: [(id: String, date: Date, stage: SleepStage, value: Double)] = []
+        for (date, dayItems) in grouped {
+            let byStage = Dictionary(grouping: dayItems) { $0.sleepStageEnum ?? .core }
+            for (stage, stageItems) in byStage {
+                let total = stageItems.map(\.value).reduce(0, +)
+                result.append((id: "\(date.timeIntervalSince1970)-\(stage.rawValue)", date: date, stage: stage, value: total))
+            }
+        }
+        return result.sorted { a, b in
+            if a.date != b.date { return a.date < b.date }
+            return a.stage.sortOrder < b.stage.sortOrder
+        }
+    }
+
+    private var sleepStackedChart: some View {
+        let aggregates = sleepStageAggregates
+        return Chart(aggregates, id: \.id) { agg in
+            BarMark(
+                x: .value("Datum", agg.date, unit: .day),
+                y: .value("Stunden", agg.value)
+            )
+            .foregroundStyle(by: .value("Schlafphase", agg.stage.displayName))
+            .cornerRadius(4)
+        }
+        .chartForegroundStyleScale([
+            SleepStage.deep.displayName: SleepStage.deep.color,
+            SleepStage.core.displayName: SleepStage.core.color,
+            SleepStage.rem.displayName: SleepStage.rem.color,
+            SleepStage.awake.displayName: SleepStage.awake.color,
+        ])
+        .chartYAxisLabel("Std")
+        .chartLegend(position: .bottom, spacing: 12)
+        .frame(height: 250)
+    }
+
+    private var sleepStageBreakdownCard: some View {
+        let nights = sleepNights
+        let nightCount = max(nights.count, 1)
+
+        // Aggregate per stage across all nights
+        let allSleepItems = filteredItems.filter { $0.type == .sleepAnalysis }
+        let byStage = Dictionary(grouping: allSleepItems) { $0.sleepStageEnum ?? .core }
+
+        let stageAverages: [(stage: SleepStage, avg: Double)] = SleepStage.allCases.compactMap { stage in
+            let total = byStage[stage]?.map(\.value).reduce(0, +) ?? 0
+            let avg = total / Double(nightCount)
+            return (stage: stage, avg: avg)
+        }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            Text("Schlafphasen (Ø pro Nacht)")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+
+            ForEach(stageAverages, id: \.stage.rawValue) { item in
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(item.stage.color)
+                        .frame(width: 10, height: 10)
+                    Text(item.stage.displayName)
+                        .font(.subheadline)
+                    Spacer()
+                    Text(dataType.formattedValue(item.avg))
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .monospacedDigit()
+                }
+            }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+    }
+
+    private var recentSleepNightsList: some View {
+        let nights = Array(sleepNights.prefix(20))
+        return ForEach(nights.indices, id: \.self) { index in
+            let night = nights[index]
+            let totalHours = night.items.map(\.value).reduce(0, +)
+
+            NavigationLink(destination: SleepNightDetailView(date: night.date, sleepItems: night.items)) {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(night.date, format: .dateTime.day().month(.abbreviated).weekday(.abbreviated))
+                            .font(.subheadline)
+                        Text(dataType.formattedValue(totalHours))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Spacer()
+
+                    // Mini stacked bar showing sleep stage proportions
+                    sleepMiniBar(items: night.items, totalHours: totalHours)
+                        .frame(width: 100, height: 12)
+                }
+            }
+            .padding(.vertical, 4)
+
+            if index < nights.count - 1 {
+                Divider()
+            }
+        }
+    }
+
+    private func sleepMiniBar(items: [HealthDataItem], totalHours: Double) -> some View {
+        let byStage = Dictionary(grouping: items) { $0.sleepStageEnum ?? .core }
+        let stages: [(stage: SleepStage, fraction: CGFloat)] = SleepStage.allCases
+            .map { stage in
+                let hours = byStage[stage]?.map(\.value).reduce(0, +) ?? 0
+                return (stage: stage, fraction: totalHours > 0 ? CGFloat(hours / totalHours) : 0)
+            }
+            .filter { $0.fraction > 0 }
+
+        return GeometryReader { geo in
+            HStack(spacing: 0) {
+                ForEach(stages, id: \.stage.rawValue) { item in
+                    Rectangle()
+                        .fill(item.stage.color)
+                        .frame(width: geo.size.width * item.fraction)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 3))
         }
     }
 

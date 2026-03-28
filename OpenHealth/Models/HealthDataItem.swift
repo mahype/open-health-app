@@ -2,6 +2,45 @@ import Foundation
 import SwiftData
 import SwiftUI
 
+// MARK: - Sleep Stage
+
+enum SleepStage: String, Codable, CaseIterable, Identifiable {
+    case deep = "deep"
+    case core = "core"
+    case rem = "rem"
+    case awake = "awake"
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .deep: return "Tiefschlaf"
+        case .core: return "Leichtschlaf"
+        case .rem: return "REM"
+        case .awake: return "Wach"
+        }
+    }
+
+    var color: Color {
+        switch self {
+        case .deep: return .indigo
+        case .core: return .blue
+        case .rem: return .teal
+        case .awake: return .orange
+        }
+    }
+
+    /// Sort order for stacking: deep at bottom (0), awake at top (3)
+    var sortOrder: Int {
+        switch self {
+        case .deep: return 0
+        case .core: return 1
+        case .rem: return 2
+        case .awake: return 3
+        }
+    }
+}
+
 @Model
 class HealthDataItem {
     var id: UUID
@@ -13,7 +52,13 @@ class HealthDataItem {
     var source: String
     var synced: Bool
     var lastSyncAttempt: Date?
-    
+    var sleepStage: String?
+
+    var sleepStageEnum: SleepStage? {
+        guard let sleepStage else { return nil }
+        return SleepStage(rawValue: sleepStage)
+    }
+
     init(
         id: UUID = UUID(),
         type: HealthDataType,
@@ -23,7 +68,8 @@ class HealthDataItem {
         endDate: Date,
         source: String,
         synced: Bool = false,
-        lastSyncAttempt: Date? = nil
+        lastSyncAttempt: Date? = nil,
+        sleepStage: SleepStage? = nil
     ) {
         self.id = id
         self.type = type
@@ -34,6 +80,7 @@ class HealthDataItem {
         self.source = source
         self.synced = synced
         self.lastSyncAttempt = lastSyncAttempt
+        self.sleepStage = sleepStage?.rawValue
     }
 }
 
@@ -160,7 +207,8 @@ struct HealthDataExportItem: Codable {
     let startDate: Date
     let endDate: Date
     let source: String
-    
+    let sleepStage: String?
+
     init(from item: HealthDataItem) {
         self.id = item.id.uuidString
         self.type = item.type.rawValue
@@ -169,5 +217,6 @@ struct HealthDataExportItem: Codable {
         self.startDate = item.startDate
         self.endDate = item.endDate
         self.source = item.source
+        self.sleepStage = item.sleepStage
     }
 }

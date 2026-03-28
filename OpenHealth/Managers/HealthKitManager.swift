@@ -26,17 +26,22 @@ enum HealthError: Error, LocalizedError {
 class HealthKitManager: ObservableObject {
     static let shared = HealthKitManager()
     let healthStore = HKHealthStore()
-    
-    @Published var authorizationStatus: HKAuthorizationStatus = .notDetermined
+
     @Published var isAuthorized = false
-    
+
+    private static let authKey = "healthKitAuthorizationRequested"
+
+    init() {
+        self.isAuthorized = UserDefaults.standard.bool(forKey: Self.authKey)
+    }
+
     // MARK: - Authorization
-    
+
     func requestAuthorization() async throws {
         guard HKHealthStore.isHealthDataAvailable() else {
             throw HealthError.healthDataNotAvailable
         }
-        
+
         let typesToRead: Set<HKSampleType> = [
             HKQuantityType.quantityType(forIdentifier: .stepCount)!,
             HKQuantityType.quantityType(forIdentifier: .bodyMass)!,
@@ -48,9 +53,19 @@ class HealthKitManager: ObservableObject {
             HKCategoryType.categoryType(forIdentifier: .sleepAnalysis)!,
             HKQuantityType.quantityType(forIdentifier: .respiratoryRate)!
         ]
-        
+
         try await healthStore.requestAuthorization(toShare: [], read: typesToRead)
+        UserDefaults.standard.set(true, forKey: Self.authKey)
         self.isAuthorized = true
+    }
+
+    func ensureAuthorization() async {
+        if isAuthorized { return }
+        do {
+            try await requestAuthorization()
+        } catch {
+            print("Authorization error: \(error)")
+        }
     }
     
     // MARK: - Fetch Data
@@ -247,6 +262,25 @@ class HealthKitManager: ObservableObject {
             let samples = try await fetchSamples(type: type, predicate: predicate)
             let sleepItems = samples.compactMap { sample -> HealthDataItem? in
                 guard let categorySample = sample as? HKCategorySample else { return nil }
+
+                let stage: SleepStage
+                switch categorySample.value {
+                case HKCategoryValueSleepAnalysis.asleepCore.rawValue:
+                    stage = .core
+                case HKCategoryValueSleepAnalysis.asleepDeep.rawValue:
+                    stage = .deep
+                case HKCategoryValueSleepAnalysis.asleepREM.rawValue:
+                    stage = .rem
+                case HKCategoryValueSleepAnalysis.awake.rawValue:
+                    stage = .awake
+                case HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue:
+                    stage = .core // Fallback for devices without stage tracking
+                case HKCategoryValueSleepAnalysis.inBed.rawValue:
+                    return nil // Skip inBed to avoid double-counting
+                default:
+                    return nil
+                }
+
                 let hours = categorySample.endDate.timeIntervalSince(categorySample.startDate) / 3600
                 return HealthDataItem(
                     type: .sleepAnalysis,
@@ -254,7 +288,8 @@ class HealthKitManager: ObservableObject {
                     unit: "hours",
                     startDate: categorySample.startDate,
                     endDate: categorySample.endDate,
-                    source: categorySample.sourceRevision.source.name
+                    source: categorySample.sourceRevision.source.name,
+                    sleepStage: stage
                 )
             }
             items.append(contentsOf: sleepItems)
@@ -355,9 +390,6 @@ class HealthKitManager: ObservableObject {
     }
     
     func checkAuthorizationStatus() {
-        guard let stepType = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
-        let status = healthStore.authorizationStatus(for: stepType)
-        self.authorizationStatus = status
-        self.isAuthorized = status == .sharingAuthorized
+        self.isAuthorized = UserDefaults.standard.bool(forKey: Self.authKey)
     }
 }
