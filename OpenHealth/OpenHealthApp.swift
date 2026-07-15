@@ -7,6 +7,6 @@ struct OpenHealthApp: App {
         WindowGroup {
             ContentView()
         }
-        .modelContainer(for: HealthDataItem.self)
+        .modelContainer(for: [HealthDataItem.self, AggregatedDataPoint.self])
     }
 }

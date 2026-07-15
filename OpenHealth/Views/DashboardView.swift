@@ -44,6 +44,7 @@ enum DashboardTimeRange: String, CaseIterable, Identifiable {
     case sevenDays = "7d"
     case thirtyDays = "30d"
     case ninetyDays = "90d"
+    case custom = "custom"
 
     var id: String { rawValue }
 
@@ -53,6 +54,7 @@ enum DashboardTimeRange: String, CaseIterable, Identifiable {
         case .sevenDays: return "7 Tage"
         case .thirtyDays: return "30 Tage"
         case .ninetyDays: return "90 Tage"
+        case .custom: return "Zeitraum"
         }
     }
 
@@ -63,6 +65,7 @@ enum DashboardTimeRange: String, CaseIterable, Identifiable {
         case .sevenDays: return calendar.date(byAdding: .day, value: -7, to: Date())!
         case .thirtyDays: return calendar.date(byAdding: .day, value: -30, to: Date())!
         case .ninetyDays: return calendar.date(byAdding: .day, value: -90, to: Date())!
+        case .custom: return Date()  // Placeholder — view uses effectiveStartDate
         }
     }
 }
@@ -74,10 +77,15 @@ struct DashboardView: View {
     @Query(sort: \HealthDataItem.startDate, order: .reverse) private var healthItems: [HealthDataItem]
 
     @StateObject private var healthKitManager = HealthKitManager.shared
-    @State private var isLoading = false
+    @State private var isRefreshing = false
+    @State private var lastRefreshedDate: Date?
     @State private var errorMessage: String?
     @State private var showError = false
-    @State private var selectedRange: DashboardTimeRange = .sevenDays
+    @State private var selectedRange: DashboardTimeRange = .today
+    @State private var selectedMonth: Int = Calendar.current.component(.month, from: Date())
+    @State private var selectedYear: Int = Calendar.current.component(.year, from: Date())
+    @State private var previousRange: DashboardTimeRange = .sevenDays
+    @State private var showMonthYearPicker = false
 
     var body: some View {
         NavigationStack {
@@ -93,9 +101,16 @@ struct DashboardView: View {
                         timeRangePicker
                     }
 
+                    // Inline fetch progress bar
+                    if isRefreshing, let progress = healthKitManager.fetchProgress {
+                        FetchProgressBar(progress: progress)
+                            .transition(.move(edge: .top).combined(with: .opacity))
+                            .animation(.easeInOut(duration: 0.3), value: progress.completed)
+                    }
+
                     // Tiles
-                    if isLoading && healthItems.isEmpty {
-                        ProgressView("Lade Daten...")
+                    if filteredItems.isEmpty && isRefreshing {
+                        ProgressView("Hole Daten von HealthKit...")
                             .padding(.top, 40)
                     } else if dashboardTiles.isEmpty && healthKitManager.isAuthorized {
                         ContentUnavailableView(
@@ -110,17 +125,18 @@ struct DashboardView: View {
                 .padding(.horizontal)
                 .padding(.bottom, 20)
             }
+            .refreshBanner(isRefreshing: isRefreshing, lastRefreshed: lastRefreshedDate)
             .background(Color(.systemGroupedBackground))
             .navigationTitle("OpenHealth")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     if healthKitManager.isAuthorized {
-                        Button(action: { loadData() }) {
+                        Button(action: { loadData(force: true) }) {
                             Image(systemName: "arrow.clockwise")
-                                .rotationEffect(.degrees(isLoading ? 360 : 0))
-                                .animation(isLoading ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isLoading)
+                                .rotationEffect(.degrees(isRefreshing ? 360 : 0))
+                                .animation(isRefreshing ? .linear(duration: 1).repeatForever(autoreverses: false) : .default, value: isRefreshing)
                         }
-                        .disabled(isLoading)
+                        .disabled(isRefreshing)
                     }
                 }
             }
@@ -134,20 +150,111 @@ struct DashboardView: View {
             await healthKitManager.ensureAuthorization()
             loadData()
         }
-        .onChange(of: selectedRange) { _, _ in
-            loadData()
+        .onChange(of: selectedRange) { old, new in
+            if new == .custom {
+                previousRange = old
+                showMonthYearPicker = true
+            } else {
+                loadData()
+            }
+        }
+        .sheet(isPresented: $showMonthYearPicker) {
+            MonthYearPickerSheet(
+                selectedMonth: $selectedMonth,
+                selectedYear: $selectedYear,
+                onCancel: { selectedRange = previousRange }
+            )
+            .onDisappear {
+                if selectedRange == .custom {
+                    loadData()
+                }
+            }
         }
     }
 
     // MARK: - Time Range Picker
 
     private var timeRangePicker: some View {
-        Picker("Zeitraum", selection: $selectedRange) {
-            ForEach(DashboardTimeRange.allCases) { range in
-                Text(range.displayName).tag(range)
+        VStack(spacing: 8) {
+            Picker("Zeitraum", selection: $selectedRange) {
+                ForEach(DashboardTimeRange.allCases) { range in
+                    if range == .custom {
+                        Image(systemName: "calendar").tag(range)
+                    } else {
+                        Text(range.displayName).tag(range)
+                    }
+                }
+            }
+            .pickerStyle(.segmented)
+
+            if selectedRange == .custom {
+                monthNavigationRow
             }
         }
-        .pickerStyle(.segmented)
+    }
+
+    // MARK: - Month Navigation
+
+    private var monthNavigationRow: some View {
+        HStack {
+            Button {
+                navigateMonth(by: -1)
+            } label: {
+                Image(systemName: "chevron.left")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(width: 36, height: 36)
+            }
+
+            Spacer()
+
+            Button {
+                showMonthYearPicker = true
+            } label: {
+                Text(currentMonthLabel)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
+            }
+
+            Spacer()
+
+            Button {
+                navigateMonth(by: 1)
+            } label: {
+                Image(systemName: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(width: 36, height: 36)
+                    .foregroundStyle(isCurrentMonth ? Color(.tertiaryLabel) : .primary)
+            }
+            .disabled(isCurrentMonth)
+        }
+    }
+
+    private func navigateMonth(by offset: Int) {
+        let currentDate = Calendar.current.date(
+            from: DateComponents(year: selectedYear, month: selectedMonth)
+        )!
+        if let newDate = Calendar.current.date(byAdding: .month, value: offset, to: currentDate) {
+            selectedMonth = Calendar.current.component(.month, from: newDate)
+            selectedYear = Calendar.current.component(.year, from: newDate)
+            loadData(force: true)
+        }
+    }
+
+    private var currentMonthDate: Date {
+        Calendar.current.date(from: DateComponents(year: selectedYear, month: selectedMonth))!
+    }
+
+    private var currentMonthLabel: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "MMMM yyyy"
+        formatter.locale = Locale(identifier: "de_DE")
+        return formatter.string(from: currentMonthDate)
+    }
+
+    private var isCurrentMonth: Bool {
+        let now = Date()
+        return selectedYear == Calendar.current.component(.year, from: now)
+            && selectedMonth == Calendar.current.component(.month, from: now)
     }
 
     // MARK: - Tile Grid
@@ -158,7 +265,7 @@ struct DashboardView: View {
                 NavigationLink(destination: destinationView(for: tile)) {
                     DashboardTileView(tile: tile, healthItems: filteredItems)
                 }
-                .buttonStyle(.plain)
+                .buttonStyle(TilePressButtonStyle())
             }
         }
     }
@@ -166,8 +273,9 @@ struct DashboardView: View {
     // MARK: - Filtered Data
 
     private var filteredItems: [HealthDataItem] {
-        let start = selectedRange.startDate
-        return healthItems.filter { $0.startDate >= start }
+        let start = effectiveStartDate
+        let end = effectiveEndDate
+        return healthItems.filter { $0.startDate >= start && $0.startDate < end }
     }
 
     // MARK: - Tile Generation
@@ -245,30 +353,98 @@ struct DashboardView: View {
 
     // MARK: - Data Loading
 
-    private func loadData() {
+    private func loadData(force: Bool = false) {
         guard healthKitManager.isAuthorized else { return }
 
-        isLoading = true
+        let rangeKey = effectiveRangeKey
+        guard force || CacheMetadataStore.isStale(
+            CacheMetadataStore.lastRefreshDate(forDashboardRange: rangeKey)
+        ) else { return }
+
+        isRefreshing = true
 
         Task {
             let enabledTypes = EnabledTypesStore.load()
             let items = await healthKitManager.fetchData(
                 for: Array(enabledTypes),
-                from: selectedRange.startDate,
-                to: Date()
+                from: effectiveStartDate,
+                to: effectiveEndDate
             )
 
-            for item in items {
-                let existing = healthItems.first { $0.id == item.id }
-                if existing == nil {
-                    modelContext.insert(item)
-                }
+            let existingIDs = Set(healthItems.map(\.id))
+            for item in items where !existingIDs.contains(item.id) {
+                modelContext.insert(item)
             }
 
-            await MainActor.run {
-                self.isLoading = false
+            CacheMetadataStore.markDashboardRefreshed(range: rangeKey)
+            lastRefreshedDate = Date()
+            isRefreshing = false
+            // Mark that we have loaded data at least once (dismisses splash screen)
+            UserDefaults.standard.set(true, forKey: "hasSeenData")
+        }
+    }
+
+    // MARK: - Effective Date Range
+
+    private var effectiveStartDate: Date {
+        guard selectedRange == .custom else { return selectedRange.startDate }
+        return Calendar.current.date(
+            from: DateComponents(year: selectedYear, month: selectedMonth, day: 1)
+        ) ?? selectedRange.startDate
+    }
+
+    private var effectiveEndDate: Date {
+        guard selectedRange == .custom else { return Date() }
+        return Calendar.current.date(byAdding: .month, value: 1, to: effectiveStartDate) ?? Date()
+    }
+
+    private var effectiveRangeKey: String {
+        selectedRange == .custom ? "custom_\(selectedYear)_\(selectedMonth)" : selectedRange.rawValue
+    }
+}
+
+// MARK: - Month Year Picker Sheet
+
+private struct MonthYearPickerSheet: View {
+    @Binding var selectedMonth: Int
+    @Binding var selectedYear: Int
+    let onCancel: () -> Void
+    @Environment(\.dismiss) private var dismiss
+
+    private let years = Array((2015...Calendar.current.component(.year, from: Date())).reversed())
+
+    var body: some View {
+        NavigationStack {
+            HStack(spacing: 0) {
+                Picker("Monat", selection: $selectedMonth) {
+                    ForEach(1...12, id: \.self) { m in
+                        Text(DateFormatter().monthSymbols[m - 1]).tag(m)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+
+                Picker("Jahr", selection: $selectedYear) {
+                    ForEach(years, id: \.self) { y in
+                        Text(String(y)).tag(y)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .frame(maxWidth: .infinity)
+            }
+            .navigationTitle("Zeitraum wählen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Abbrechen") { onCancel(); dismiss() }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Fertig") { dismiss() }
+                        .fontWeight(.semibold)
+                }
             }
         }
+        .presentationDetents([.height(280)])
     }
 }
 
@@ -518,6 +694,45 @@ struct DashboardTileView: View {
         }
         return grouped.map { (date: $0.key, value: $0.value.map(\.value).reduce(0, +)) }
             .sorted { $0.date < $1.date }
+    }
+}
+
+// MARK: - Fetch Progress Bar
+
+struct FetchProgressBar: View {
+    let progress: FetchProgress
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Image(systemName: "arrow.down.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.blue)
+                Text(progress.label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text("\(Int(progress.fraction * 100)) %")
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            }
+            ProgressView(value: progress.fraction)
+                .tint(.blue)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
+// MARK: - Tile Press Button Style
+
+struct TilePressButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .opacity(configuration.isPressed ? 0.82 : 1.0)
+            .animation(.easeInOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 

@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <!-- Background gradient: deep teal to emerald green -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0d7b6e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0a5c52;stop-opacity:1" />
+    </linearGradient>
+    <!-- Glow for ECG line -->
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="8" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <!-- Subtle inner shadow -->
+    <radialGradient id="innerLight" cx="35%" cy="30%" r="65%">
+      <stop offset="0%" style="stop-color:#ffffff;stop-opacity:0.12" />
+      <stop offset="100%" style="stop-color:#000000;stop-opacity:0.08" />
+    </radialGradient>
+  </defs>
+
+  <!-- Rounded square background (iOS clips to shape, but let's be explicit) -->
+  <rect width="1024" height="1024" rx="220" ry="220" fill="url(#bgGrad)"/>
+  <!-- Subtle inner light overlay -->
+  <rect width="1024" height="1024" rx="220" ry="220" fill="url(#innerLight)"/>
+
+  <!-- Leaf shape (lower-left, soft) -->
+  <path d="M 200 820
+             C 160 680, 260 560, 380 500
+             C 340 640, 280 740, 200 820 Z"
+        fill="#ffffff" opacity="0.10"/>
+  <path d="M 200 820
+             C 240 780, 310 710, 380 500"
+        fill="none" stroke="#ffffff" stroke-width="6" opacity="0.15" stroke-linecap="round"/>
+
+  <!-- Small leaf / sprout icon top-right area, subtle -->
+  <g transform="translate(660, 290) rotate(-30)" opacity="0.18">
+    <ellipse cx="0" cy="0" rx="60" ry="110" fill="#a8edcc"/>
+    <line x1="0" y1="110" x2="0" y2="-60" stroke="#ffffff" stroke-width="5" stroke-linecap="round"/>
+  </g>
+
+  <!-- ECG / Heart rate line - main graphic element -->
+  <!-- Path goes: flat → small bump → flat → big spike up → spike down → overshoot → flat -->
+  <path d="M 120 512
+             L 310 512
+             L 340 470
+             L 370 512
+             L 410 512
+             L 450 290
+             L 490 720
+             L 530 430
+             L 570 512
+             L 710 512
+             L 730 480
+             L 760 512
+             L 904 512"
+        fill="none"
+        stroke="#ffffff"
+        stroke-width="28"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        filter="url(#glow)"
+        opacity="0.95"/>
+
+  <!-- Heart icon embedded in the ECG peak area -->
+  <g transform="translate(512, 512)" opacity="0.0">
+    <!-- invisible placeholder -->
+  </g>
+
+  <!-- Subtle circular pulse ring around center -->
+  <circle cx="512" cy="512" r="310" fill="none" stroke="#ffffff" stroke-width="3" opacity="0.08"/>
+  <circle cx="512" cy="512" r="380" fill="none" stroke="#ffffff" stroke-width="2" opacity="0.05"/>
+
+  <!-- Small heart symbol above the ECG peak -->
+  <g transform="translate(450, 220)" filter="url(#glow)">
+    <path d="M 0 14
+               C 0 6, -10 0, -20 0
+               C -30 0, -38 8, -38 20
+               C -38 38, -20 52, 0 70
+               C 20 52, 38 38, 38 20
+               C 38 8, 30 0, 20 0
+               C 10 0, 0 6, 0 14 Z"
+          fill="#ffffff" opacity="0.90"/>
+  </g>
+</svg>

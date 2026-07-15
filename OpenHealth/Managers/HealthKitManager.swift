@@ -7,7 +7,7 @@ enum HealthError: Error, LocalizedError {
     case healthDataNotAvailable
     case quantityTypeNotAvailable
     case authorizationDenied
-    
+
     var errorDescription: String? {
         switch self {
         case .healthDataNotAvailable:
@@ -22,12 +22,24 @@ enum HealthError: Error, LocalizedError {
 
 // MARK: - HealthKit Manager
 
+// MARK: - Fetch Progress
+
+struct FetchProgress {
+    let completed: Int
+    let total: Int
+    var fraction: Double { total > 0 ? Double(completed) / Double(total) : 0 }
+    var label: String { "Lade Daten... \(completed)/\(total)" }
+}
+
+// MARK: - HealthKit Manager
+
 @MainActor
 class HealthKitManager: ObservableObject {
     static let shared = HealthKitManager()
     let healthStore = HKHealthStore()
 
     @Published var isAuthorized = false
+    @Published var fetchProgress: FetchProgress?
 
     private static let authKey = "healthKitAuthorizationRequested"
 
@@ -67,9 +79,9 @@ class HealthKitManager: ObservableObject {
             print("Authorization error: \(error)")
         }
     }
-    
+
     // MARK: - Fetch Data
-    
+
     func fetchAllData(for date: Date) async -> [HealthDataItem] {
         let predicate = createDayPredicate(for: date)
         return await fetchAllData(predicate: predicate)
@@ -86,31 +98,69 @@ class HealthKitManager: ObservableObject {
     }
 
     private func fetchAllData(predicate: NSPredicate, types: Set<HealthDataType>? = nil) async -> [HealthDataItem] {
-        var allItems: [HealthDataItem] = []
         let enabledTypes = types ?? Set(HealthDataType.allCases)
 
-        if enabledTypes.contains(.stepCount) { await appendSteps(to: &allItems, predicate: predicate) }
-        if enabledTypes.contains(.bodyMass) { await appendWeight(to: &allItems, predicate: predicate) }
-        if enabledTypes.contains(.heartRate) { await appendHeartRate(to: &allItems, predicate: predicate) }
-        if enabledTypes.contains(.bloodPressureSystolic) || enabledTypes.contains(.bloodPressureDiastolic) {
-            await appendBloodPressure(to: &allItems, predicate: predicate)
-        }
-        if enabledTypes.contains(.oxygenSaturation) { await appendOxygenSaturation(to: &allItems, predicate: predicate) }
-        if enabledTypes.contains(.activeEnergyBurned) { await appendActiveEnergy(to: &allItems, predicate: predicate) }
-        if enabledTypes.contains(.sleepAnalysis) { await appendSleep(to: &allItems, predicate: predicate) }
-        if enabledTypes.contains(.respiratoryRate) { await appendRespiratoryRate(to: &allItems, predicate: predicate) }
+        // Count active tasks first so we can show an accurate progress bar
+        var total = 0
+        if enabledTypes.contains(.stepCount) { total += 1 }
+        if enabledTypes.contains(.bodyMass) { total += 1 }
+        if enabledTypes.contains(.heartRate) { total += 1 }
+        if enabledTypes.contains(.bloodPressureSystolic) || enabledTypes.contains(.bloodPressureDiastolic) { total += 1 }
+        if enabledTypes.contains(.oxygenSaturation) { total += 1 }
+        if enabledTypes.contains(.activeEnergyBurned) { total += 1 }
+        if enabledTypes.contains(.sleepAnalysis) { total += 1 }
+        if enabledTypes.contains(.respiratoryRate) { total += 1 }
 
+        guard total > 0 else { return [] }
+
+        fetchProgress = FetchProgress(completed: 0, total: total)
+
+        var allItems: [HealthDataItem] = []
+
+        await withTaskGroup(of: [HealthDataItem].self) { group in
+            if enabledTypes.contains(.stepCount) {
+                group.addTask { await self.fetchSteps(predicate: predicate) }
+            }
+            if enabledTypes.contains(.bodyMass) {
+                group.addTask { await self.fetchWeight(predicate: predicate) }
+            }
+            if enabledTypes.contains(.heartRate) {
+                group.addTask { await self.fetchHeartRate(predicate: predicate) }
+            }
+            if enabledTypes.contains(.bloodPressureSystolic) || enabledTypes.contains(.bloodPressureDiastolic) {
+                group.addTask { await self.fetchBloodPressure(predicate: predicate) }
+            }
+            if enabledTypes.contains(.oxygenSaturation) {
+                group.addTask { await self.fetchOxygenSaturation(predicate: predicate) }
+            }
+            if enabledTypes.contains(.activeEnergyBurned) {
+                group.addTask { await self.fetchActiveEnergy(predicate: predicate) }
+            }
+            if enabledTypes.contains(.sleepAnalysis) {
+                group.addTask { await self.fetchSleep(predicate: predicate) }
+            }
+            if enabledTypes.contains(.respiratoryRate) {
+                group.addTask { await self.fetchRespiratoryRate(predicate: predicate) }
+            }
+
+            for await items in group {
+                allItems += items
+                let done = (fetchProgress?.completed ?? 0) + 1
+                fetchProgress = FetchProgress(completed: done, total: total)
+            }
+        }
+
+        fetchProgress = nil
         return allItems
     }
-    
-    // MARK: - Individual Fetch Methods
-    
-    private func appendSteps(to items: inout [HealthDataItem], predicate: NSPredicate) async {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return }
 
+    // MARK: - Individual Fetch Methods (return arrays instead of mutating)
+
+    nonisolated private func fetchSteps(predicate: NSPredicate) async -> [HealthDataItem] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else { return [] }
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
-            let stepItems = samples.compactMap { sample -> HealthDataItem? in
+            return samples.compactMap { sample -> HealthDataItem? in
                 guard let quantitySample = sample as? HKQuantitySample else { return nil }
                 return HealthDataItem(
                     type: .stepCount,
@@ -121,18 +171,17 @@ class HealthKitManager: ObservableObject {
                     source: quantitySample.sourceRevision.source.name
                 )
             }
-            items.append(contentsOf: stepItems)
         } catch {
             print("Error fetching steps: \(error)")
+            return []
         }
     }
-    
-    private func appendWeight(to items: inout [HealthDataItem], predicate: NSPredicate) async {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) else { return }
 
+    nonisolated private func fetchWeight(predicate: NSPredicate) async -> [HealthDataItem] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .bodyMass) else { return [] }
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
-            let weightItems = samples.compactMap { sample -> HealthDataItem? in
+            return samples.compactMap { sample -> HealthDataItem? in
                 guard let quantitySample = sample as? HKQuantitySample else { return nil }
                 return HealthDataItem(
                     type: .bodyMass,
@@ -143,18 +192,17 @@ class HealthKitManager: ObservableObject {
                     source: quantitySample.sourceRevision.source.name
                 )
             }
-            items.append(contentsOf: weightItems)
         } catch {
             print("Error fetching weight: \(error)")
+            return []
         }
     }
-    
-    private func appendHeartRate(to items: inout [HealthDataItem], predicate: NSPredicate) async {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return }
 
+    nonisolated private func fetchHeartRate(predicate: NSPredicate) async -> [HealthDataItem] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .heartRate) else { return [] }
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
-            let heartRateItems = samples.compactMap { sample -> HealthDataItem? in
+            return samples.compactMap { sample -> HealthDataItem? in
                 guard let quantitySample = sample as? HKQuantitySample else { return nil }
                 return HealthDataItem(
                     type: .heartRate,
@@ -165,18 +213,19 @@ class HealthKitManager: ObservableObject {
                     source: quantitySample.sourceRevision.source.name
                 )
             }
-            items.append(contentsOf: heartRateItems)
         } catch {
             print("Error fetching heart rate: \(error)")
+            return []
         }
     }
-    
-    private func appendBloodPressure(to items: inout [HealthDataItem], predicate: NSPredicate) async {
-        // Fetch systolic
+
+    nonisolated private func fetchBloodPressure(predicate: NSPredicate) async -> [HealthDataItem] {
+        var result: [HealthDataItem] = []
+
         if let systolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureSystolic) {
             do {
                 let samples = try await fetchSamples(type: systolicType, predicate: predicate)
-                let bpItems = samples.compactMap { sample -> HealthDataItem? in
+                let items = samples.compactMap { sample -> HealthDataItem? in
                     guard let quantitySample = sample as? HKQuantitySample else { return nil }
                     return HealthDataItem(
                         type: .bloodPressureSystolic,
@@ -187,15 +236,14 @@ class HealthKitManager: ObservableObject {
                         source: quantitySample.sourceRevision.source.name
                     )
                 }
-                items.append(contentsOf: bpItems)
+                result.append(contentsOf: items)
             } catch {}
         }
-        
-        // Fetch diastolic
+
         if let diastolicType = HKQuantityType.quantityType(forIdentifier: .bloodPressureDiastolic) {
             do {
                 let samples = try await fetchSamples(type: diastolicType, predicate: predicate)
-                let bpItems = samples.compactMap { sample -> HealthDataItem? in
+                let items = samples.compactMap { sample -> HealthDataItem? in
                     guard let quantitySample = sample as? HKQuantitySample else { return nil }
                     return HealthDataItem(
                         type: .bloodPressureDiastolic,
@@ -206,17 +254,18 @@ class HealthKitManager: ObservableObject {
                         source: quantitySample.sourceRevision.source.name
                     )
                 }
-                items.append(contentsOf: bpItems)
+                result.append(contentsOf: items)
             } catch {}
         }
-    }
-    
-    private func appendOxygenSaturation(to items: inout [HealthDataItem], predicate: NSPredicate) async {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return }
 
+        return result
+    }
+
+    nonisolated private func fetchOxygenSaturation(predicate: NSPredicate) async -> [HealthDataItem] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .oxygenSaturation) else { return [] }
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
-            let o2Items = samples.compactMap { sample -> HealthDataItem? in
+            return samples.compactMap { sample -> HealthDataItem? in
                 guard let quantitySample = sample as? HKQuantitySample else { return nil }
                 return HealthDataItem(
                     type: .oxygenSaturation,
@@ -227,18 +276,17 @@ class HealthKitManager: ObservableObject {
                     source: quantitySample.sourceRevision.source.name
                 )
             }
-            items.append(contentsOf: o2Items)
         } catch {
             print("Error fetching oxygen saturation: \(error)")
+            return []
         }
     }
-    
-    private func appendActiveEnergy(to items: inout [HealthDataItem], predicate: NSPredicate) async {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return }
 
+    nonisolated private func fetchActiveEnergy(predicate: NSPredicate) async -> [HealthDataItem] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .activeEnergyBurned) else { return [] }
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
-            let energyItems = samples.compactMap { sample -> HealthDataItem? in
+            return samples.compactMap { sample -> HealthDataItem? in
                 guard let quantitySample = sample as? HKQuantitySample else { return nil }
                 return HealthDataItem(
                     type: .activeEnergyBurned,
@@ -249,18 +297,17 @@ class HealthKitManager: ObservableObject {
                     source: quantitySample.sourceRevision.source.name
                 )
             }
-            items.append(contentsOf: energyItems)
         } catch {
             print("Error fetching active energy: \(error)")
+            return []
         }
     }
-    
-    private func appendSleep(to items: inout [HealthDataItem], predicate: NSPredicate) async {
-        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return }
 
+    nonisolated private func fetchSleep(predicate: NSPredicate) async -> [HealthDataItem] {
+        guard let type = HKCategoryType.categoryType(forIdentifier: .sleepAnalysis) else { return [] }
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
-            let sleepItems = samples.compactMap { sample -> HealthDataItem? in
+            return samples.compactMap { sample -> HealthDataItem? in
                 guard let categorySample = sample as? HKCategorySample else { return nil }
 
                 let stage: SleepStage
@@ -274,9 +321,9 @@ class HealthKitManager: ObservableObject {
                 case HKCategoryValueSleepAnalysis.awake.rawValue:
                     stage = .awake
                 case HKCategoryValueSleepAnalysis.asleepUnspecified.rawValue:
-                    stage = .core // Fallback for devices without stage tracking
+                    stage = .core
                 case HKCategoryValueSleepAnalysis.inBed.rawValue:
-                    return nil // Skip inBed to avoid double-counting
+                    return nil
                 default:
                     return nil
                 }
@@ -292,18 +339,17 @@ class HealthKitManager: ObservableObject {
                     sleepStage: stage
                 )
             }
-            items.append(contentsOf: sleepItems)
         } catch {
             print("Error fetching sleep: \(error)")
+            return []
         }
     }
-    
-    private func appendRespiratoryRate(to items: inout [HealthDataItem], predicate: NSPredicate) async {
-        guard let type = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) else { return }
 
+    nonisolated private func fetchRespiratoryRate(predicate: NSPredicate) async -> [HealthDataItem] {
+        guard let type = HKQuantityType.quantityType(forIdentifier: .respiratoryRate) else { return [] }
         do {
             let samples = try await fetchSamples(type: type, predicate: predicate)
-            let rateItems = samples.compactMap { sample -> HealthDataItem? in
+            return samples.compactMap { sample -> HealthDataItem? in
                 guard let quantitySample = sample as? HKQuantitySample else { return nil }
                 return HealthDataItem(
                     type: .respiratoryRate,
@@ -314,14 +360,14 @@ class HealthKitManager: ObservableObject {
                     source: quantitySample.sourceRevision.source.name
                 )
             }
-            items.append(contentsOf: rateItems)
         } catch {
             print("Error fetching respiratory rate: \(error)")
+            return []
         }
     }
-    
+
     // MARK: - Generic Fetch
-    
+
     nonisolated private func fetchSamples(type: HKSampleType, predicate: NSPredicate) async throws -> [HKSample] {
         try await withCheckedThrowingContinuation { continuation in
             let query = HKSampleQuery(
@@ -339,16 +385,16 @@ class HealthKitManager: ObservableObject {
             self.healthStore.execute(query)
         }
     }
-    
+
     // MARK: - Statistics
-    
+
     func fetchStepCount(for date: Date) async -> Double {
         guard let type = HKQuantityType.quantityType(forIdentifier: .stepCount) else {
             return 0
         }
-        
+
         let predicate = createDayPredicate(for: date)
-        
+
         do {
             return try await withCheckedThrowingContinuation { continuation in
                 let query = HKStatisticsQuery(
@@ -370,9 +416,9 @@ class HealthKitManager: ObservableObject {
             return 0
         }
     }
-    
+
     // MARK: - Helpers
-    
+
     nonisolated func createRangePredicate(from startDate: Date, to endDate: Date) -> NSPredicate {
         HKQuery.predicateForSamples(withStart: startDate, end: endDate, options: .strictStartDate)
     }
@@ -381,14 +427,14 @@ class HealthKitManager: ObservableObject {
         let calendar = Calendar.current
         let startDate = calendar.startOfDay(for: date)
         let endDate = calendar.date(byAdding: .day, value: 1, to: startDate)!
-        
+
         return HKQuery.predicateForSamples(
             withStart: startDate,
             end: endDate,
             options: .strictStartDate
         )
     }
-    
+
     func checkAuthorizationStatus() {
         self.isAuthorized = UserDefaults.standard.bool(forKey: Self.authKey)
     }

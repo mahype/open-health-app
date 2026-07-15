@@ -197,6 +197,33 @@ enum EnabledTypesStore {
     }
 }
 
+// MARK: - Cache Metadata
+
+enum CacheMetadataStore {
+    static let staleThreshold: TimeInterval = 5 * 60  // 5 Minuten
+
+    static func lastRefreshDate(forDashboardRange range: String) -> Date? {
+        UserDefaults.standard.object(forKey: "refresh_dashboard_\(range)") as? Date
+    }
+
+    static func markDashboardRefreshed(range: String) {
+        UserDefaults.standard.set(Date(), forKey: "refresh_dashboard_\(range)")
+    }
+
+    static func lastRefreshDate(for type: HealthDataType, range: String) -> Date? {
+        UserDefaults.standard.object(forKey: "refresh_\(type.rawValue)_\(range)") as? Date
+    }
+
+    static func markRefreshed(for type: HealthDataType, range: String) {
+        UserDefaults.standard.set(Date(), forKey: "refresh_\(type.rawValue)_\(range)")
+    }
+
+    static func isStale(_ date: Date?) -> Bool {
+        guard let date else { return true }
+        return Date().timeIntervalSince(date) > staleThreshold
+    }
+}
+
 // MARK: - Export Model
 
 struct HealthDataExportItem: Codable {

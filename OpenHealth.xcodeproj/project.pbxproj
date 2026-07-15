@@ -16,6 +16,13 @@
 		1A2B3C4D5E6F7G8H9I0J1K2X /* ExportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7G8H9I0J1K2Y /* ExportView.swift */; };
 		1A2B3C4D5E6F7G8H9I0J1K40 /* SensorDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1A2B3C4D5E6F7G8H9I0J1K41 /* SensorDetailView.swift */; };
 		2A3B4C5D6E7F8A9B0C1D2E50 /* SleepNightDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2A3B4C5D6E7F8A9B0C1D2E51 /* SleepNightDetailView.swift */; };
+		4B5C6D7E8F9A0B1C2D3E4F70 /* RefreshBannerModifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B5C6D7E8F9A0B1C2D3E4F71 /* RefreshBannerModifier.swift */; };
+		5C6D7E8F9A0B1C2D3E4F5A60 /* AggregatedDataPoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6D7E8F9A0B1C2D3E4F5A61 /* AggregatedDataPoint.swift */; };
+		5C6D7E8F9A0B1C2D3E4F5A62 /* AggregationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6D7E8F9A0B1C2D3E4F5A63 /* AggregationService.swift */; };
+		5C6D7E8F9A0B1C2D3E4F5A64 /* SensorDetailViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6D7E8F9A0B1C2D3E4F5A65 /* SensorDetailViewModel.swift */; };
+		5C6D7E8F9A0B1C2D3E4F5A66 /* SensorDetailContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6D7E8F9A0B1C2D3E4F5A67 /* SensorDetailContent.swift */; };
+		5C6D7E8F9A0B1C2D3E4F5A68 /* SplashView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C6D7E8F9A0B1C2D3E4F5A69 /* SplashView.swift */; };
+		3A4B5C6D7E8F9A0B1C2D3E60 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 3A4B5C6D7E8F9A0B1C2D3E61 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -28,7 +35,14 @@
 		1A2B3C4D5E6F7G8H9I0J1K2Y /* ExportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExportView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K41 /* SensorDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorDetailView.swift; sourceTree = "<group>"; };
 		2A3B4C5D6E7F8A9B0C1D2E51 /* SleepNightDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SleepNightDetailView.swift; sourceTree = "<group>"; };
+		4B5C6D7E8F9A0B1C2D3E4F71 /* RefreshBannerModifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RefreshBannerModifier.swift; sourceTree = "<group>"; };
+		5C6D7E8F9A0B1C2D3E4F5A61 /* AggregatedDataPoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AggregatedDataPoint.swift; sourceTree = "<group>"; };
+		5C6D7E8F9A0B1C2D3E4F5A63 /* AggregationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AggregationService.swift; sourceTree = "<group>"; };
+		5C6D7E8F9A0B1C2D3E4F5A65 /* SensorDetailViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorDetailViewModel.swift; sourceTree = "<group>"; };
+		5C6D7E8F9A0B1C2D3E4F5A67 /* SensorDetailContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SensorDetailContent.swift; sourceTree = "<group>"; };
+		5C6D7E8F9A0B1C2D3E4F5A69 /* SplashView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SplashView.swift; sourceTree = "<group>"; };
 		1A2B3C4D5E6F7G8H9I0J1K2Z /* OpenHealth.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenHealth.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		3A4B5C6D7E8F9A0B1C2D3E61 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -55,6 +69,7 @@
 			children = (
 				1A2B3C4D5E6F7G8H9I0J1K2M /* OpenHealthApp.swift */,
 				1A2B3C4D5E6F7G8H9I0J1K2O /* ContentView.swift */,
+				3A4B5C6D7E8F9A0B1C2D3E61 /* Assets.xcassets */,
 				1A2B3C4D5E6F7G8H9I0J1K34 /* Managers */,
 				1A2B3C4D5E6F7G8H9I0J1K35 /* Models */,
 				1A2B3C4D5E6F7G8H9I0J1K36 /* Views */,
@@ -74,6 +89,7 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4D5E6F7G8H9I0J1K2Q /* HealthKitManager.swift */,
+				5C6D7E8F9A0B1C2D3E4F5A63 /* AggregationService.swift */,
 			);
 			path = Managers;
 			sourceTree = "<group>";
@@ -82,6 +98,7 @@
 			isa = PBXGroup;
 			children = (
 				1A2B3C4D5E6F7G8H9I0J1K2S /* HealthDataItem.swift */,
+				5C6D7E8F9A0B1C2D3E4F5A61 /* AggregatedDataPoint.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -94,6 +111,10 @@
 				1A2B3C4D5E6F7G8H9I0J1K2Y /* ExportView.swift */,
 				1A2B3C4D5E6F7G8H9I0J1K41 /* SensorDetailView.swift */,
 				2A3B4C5D6E7F8A9B0C1D2E51 /* SleepNightDetailView.swift */,
+				4B5C6D7E8F9A0B1C2D3E4F71 /* RefreshBannerModifier.swift */,
+				5C6D7E8F9A0B1C2D3E4F5A65 /* SensorDetailViewModel.swift */,
+				5C6D7E8F9A0B1C2D3E4F5A67 /* SensorDetailContent.swift */,
+				5C6D7E8F9A0B1C2D3E4F5A69 /* SplashView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -156,6 +177,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				3A4B5C6D7E8F9A0B1C2D3E60 /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -175,6 +197,12 @@
 				1A2B3C4D5E6F7G8H9I0J1K2X /* ExportView.swift in Sources */,
 				1A2B3C4D5E6F7G8H9I0J1K40 /* SensorDetailView.swift in Sources */,
 				2A3B4C5D6E7F8A9B0C1D2E50 /* SleepNightDetailView.swift in Sources */,
+				4B5C6D7E8F9A0B1C2D3E4F70 /* RefreshBannerModifier.swift in Sources */,
+				5C6D7E8F9A0B1C2D3E4F5A60 /* AggregatedDataPoint.swift in Sources */,
+				5C6D7E8F9A0B1C2D3E4F5A62 /* AggregationService.swift in Sources */,
+				5C6D7E8F9A0B1C2D3E4F5A64 /* SensorDetailViewModel.swift in Sources */,
+				5C6D7E8F9A0B1C2D3E4F5A66 /* SensorDetailContent.swift in Sources */,
+				5C6D7E8F9A0B1C2D3E4F5A68 /* SplashView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
